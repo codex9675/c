@@ -1,38 +1,45 @@
-'use client'
-import { signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+"use client";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 export default function LoginPage() {
-  const [error, setError] = useState('')
-  const router = useRouter()
+  const [error, setError] = useState("");
+  const router = useRouter();
 
+  const getError = (error) => {
+    switch (error) {
+      case 'CredentialsSignin':
+        return "Invalid username or password. Please try again.";
+      default:
+        return "An unexpected error occurred. Please try again.";
+    }
+  };
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    const formData = new FormData(e.target)
-    const username = formData.get('username')
-    const password = formData.get('password')
-
+    e.preventDefault(e);
+    const formData = new FormData(e.target);
+    const username = formData.get("username");
+    const password = formData.get("password");
     const result = await signIn('credentials', {
       username,
       password,
-      redirect: false
-    })
+      redirect: false,
+    });
 
     if (result?.error) {
-      setError(result.error)
+      setError(getError(result.error));
     } else {
       // Redirect based on role
-      const res = await fetch('/api/auth/session')
-      const session = await res.json()
-      
-      if (session.user.role === 'MASTER') {
-        router.push('/master/')
+      const res = await fetch("/api/auth/session");
+      const session = await res.json();
+
+      if (session.user.role === "MASTER") {
+        router.push("/master/");
       } else {
-        router.push(`/user/${session.user.id}/dashboard`)
+        router.push(`/user/${session.user.id}/dashboard`);
       }
     }
-  }
+  };
 
   return (
     <div className="max-w-md mx-auto mt-10 p-6 border rounded-lg shadow-md">
@@ -73,5 +80,5 @@ export default function LoginPage() {
         </button>
       </form>
     </div>
-  )
+  );
 }

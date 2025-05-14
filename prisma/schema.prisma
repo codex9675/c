@@ -9,31 +9,59 @@ datasource db {
 
 model User {
   id              Int       @id @default(autoincrement())
-  username        String    @unique @db.VarChar(101)
-  password        String    @db.VarChar(255)
-  role            Role      @default(USER)
-  passwordExpires DateTime?
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  username        String    @unique
+  password        String
+  role            Role      @default(ADMIN)
+  plan            Plan      @default(BASIC)
+  themeColor      String    @default("#ffffff")
+  shopName        String?
+  storeImage      String?
+  description     String?
+  portfolioColor  String?
+  passwordExpires DateTime
+  createdAt       DateTime  @default(now())
   products        Product[]
+  profileLink     String?   @unique
+  shop            Shop?     @relation("UserToShop")
 
+  @@index([username])
   @@map("users")
 }
 
 model Product {
   id          Int      @id @default(autoincrement())
   name        String
-  description String
   price       Float
+  description String
   image       String
   createdAt   DateTime @default(now())
   userId      Int
   user        User     @relation(fields: [userId], references: [id])
+  shopId      Int?
+  shop        Shop?    @relation(fields: [shopId], references: [id])
+}
 
-  @@map("products")
+model Shop {
+  id              Int       @id @default(autoincrement())
+  name            String
+  description     String
+  price           Float
+  image           String
+  userId          Int       @unique
+  user            User      @relation("UserToShop", fields: [userId], references: [id])
+  products        Product[]
+  createdAt       DateTime  @default(now())
+  backgroundColor String    @default("#ffffff")
 }
 
 enum Role {
   MASTER
+  ADMIN
   USER
+}
+
+enum Plan {
+  BASIC
+  PROFESSIONAL
+  ENTERPRISE
 }

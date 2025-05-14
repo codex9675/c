@@ -1,43 +1,32 @@
-import { getToken } from "next-auth/jwt";
-import { NextResponse } from "next/server";
+import { getToken } from 'next-auth/jwt';
+import { NextResponse } from 'next/server';
 
 export async function middleware(request) {
+  // Get token and user role
+  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
   const { pathname } = request.nextUrl;
-  const token = await getToken({
-    req: request,
-    secret: process.env.NEXTAUTH_SECRET,
-  });
 
-  // Public routes
-  if (pathname.startsWith("/auth") || pathname === "/") {
+  // Skip expiration check for MASTER account
+  if (token?.role === 'MASTER') {
     return NextResponse.next();
   }
 
-  // Redirect to login if not authenticated
-  if (!token) {
-    return NextResponse.redirect(new URL("/auth/login", request.url));
-  }
-
-  // User dashboard protection
-  if (pathname.startsWith("/user/")) {
-    const userId = pathname.split("/")[2];
-    if (token.sub !== userId) {
-      return NextResponse.redirect(
-        new URL(`/user/${token.sub}/dashboard`, request.url)
-      );
+  // Check for expired ADMIN accounts (skip regular USER accounts)
+  if (token?.role === 'ADMIN' && token.passwordExpires) {
+    const isExpired = new Date(token.passwordExpires) < new Date();
+    if (isExpired) {
+      const loginUrl = new URL('/auth/login', request.url);
+      loginUrl.searchParams.set('error', 'Account expired');
+      return NextResponse.redirect(loginUrl);
     }
   }
 
-  // Master routes protection
-  if (pathname.startsWith("/master") && token.role !== "MASTER") {
-    return NextResponse.redirect(
-      new URL("/auth/login?error=Unauthorized", request.url)
-    );
+  // Protect routes under /master - only accessible by MASTER role
+  if (pathname.startsWith('/master') && token?.role !== 'MASTER') {
+    const loginUrl = new URL('/auth/login', request.url);
+    loginUrl.searchParams.set('error', 'Unauthorized');
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();
 }
-
-export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
-};

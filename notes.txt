@@ -1,0 +1,4 @@
+https://localhost:3000/portfolio/{cover}/page/{ID}  
+
+
+DATABASE_URL="mysql://gukluk_data:PranJit332211@saturn.bestsolutions.com:3306/product_management"
