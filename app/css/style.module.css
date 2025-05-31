@@ -1,0 +1,72 @@
+.coverTitle {
+  position: absolute;
+  bottom: 594px;
+  left: 16px; /* Set to left side with spacing */
+  width: 90%; /* Responsive width */
+  max-width: 500px; /* Cap the width */
+
+  font-size: 20px;
+}
+@media (max-width: 1410px) {
+  .info {
+    text-align: center;
+    margin: auto;
+    position: relative;
+    right: 40px;
+    top: 280px;
+  }
+}
+
+@media (max-width: 770px) {
+  .coverTitle {
+    border-bottom: 2px solid pink;
+    left: 5%;
+    bottom: 650px;
+    width: 300px;
+  }
+  .img {
+    width: 1500px;
+    height: 1500px;
+  }
+  .info {
+    margin-bottom: 34pc;
+  }
+  .black {
+    position: relative;
+    left: 120px;
+    bottom: 60px;
+  }
+  .info p {
+    width: 400px;
+  }
+  .autoType {
+    width: 400px;
+    line-height: 60px;
+    font-size: 50px;
+    position: relative;
+    right: 20px;
+  }
+
+  .AutoH h4 {
+    max-width: 450px;
+    width: 100%;
+  }
+
+  .AutoH h4,
+  .AutoH a {
+    position: relative;
+    right: 23px;
+  }
+  .background {
+    height: 700px;
+  }
+}
+
+@media (max-width: 670px) {
+  .coverTitle {
+    border-bottom: 2px solid pink;
+    left: 18%;
+    bottom: 600px;
+    width: 300px;
+  }
+}

@@ -17,7 +17,7 @@ export default function CreateUserPage() {
 
   // Generate portfolio link in real-time
   useEffect(() => {
-    const baseUrl = 'http://localhost:3000/profile'
+    const baseUrl = 'http://localhost:3000/portfolio'
     const link = formData.portfolioUrl 
       ? `${baseUrl}/${formData.portfolioUrl}`
       : `${baseUrl}/${formData.username.toLowerCase().replace(/\s+/g, '-')}`
@@ -127,7 +127,7 @@ export default function CreateUserPage() {
         <div>
           <label className="block text-sm font-medium mb-1">Portfolio URL</label>
           <div className="flex items-center space-x-2">
-            <span className="text-gray-500">http://localhost:3000/profile/</span>
+            <span className="text-gray-500">http://localhost:3000/portfolio/</span>
             <input
               type="text"
               name="portfolioUrl"

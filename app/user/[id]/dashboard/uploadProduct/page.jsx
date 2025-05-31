@@ -1,6 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 export default function UploadProduct() {
   const [formData, setFormData] = useState({
@@ -12,11 +13,18 @@ export default function UploadProduct() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    }
+  }, [status]);
 
   const handleChange = (e) => {
     const { name, value, files } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       [name]: files ? files[0] : value
     }));
@@ -29,37 +37,34 @@ export default function UploadProduct() {
     setSuccess(false);
 
     try {
-      const formDataToSend = new FormData();
-      formDataToSend.append('name', formData.name);
-      formDataToSend.append('price', formData.price);
-      formDataToSend.append('description', formData.description);
-      if (formData.image) {
-        formDataToSend.append('image', formData.image);
+      if (!formData.name || !formData.price || !formData.description || !formData.image) {
+        throw new Error('All fields are required');
       }
 
-      const response = await fetch('/api/products', {
+      const data = new FormData();
+      data.append('name', formData.name);
+      data.append('price', formData.price);
+      data.append('description', formData.description);
+      data.append('image', formData.image);
+      data.append('username', session.user.username); // 🔥 You must return `username` in session
+
+      const res = await fetch('/api/products', {
         method: 'POST',
-        body: formDataToSend
+        body: data
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to upload product');
+      if (!res.ok) {
+        const { error } = await res.json();
+        throw new Error(error);
       }
 
-      // Show success message
+      const product = await res.json();
       setSuccess(true);
-      
-      // Reset form after successful submission
-      setFormData({
-        name: '',
-        price: '',
-        description: '',
-        image: null
-      });
+      setFormData({ name: '', price: '', description: '', image: null });
 
-      // Hide success message after 3 seconds
-      setTimeout(() => setSuccess(false), 3000);
+      setTimeout(() => {
+        router.push(`/portfolio/${session.user.username}/products/${product.id}`);
+      }, 2000);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -67,80 +72,24 @@ export default function UploadProduct() {
     }
   };
 
-  return (
-    <div className="max-w-md mx-auto p-6 rounded-lg shadow-md">
-      <h1 className="text-2xl font-bold mb-6">Upgrade</h1>
-      
-      {/* Success Alert */}
-      {success && (
-        <div className="mb-4 p-3 bg-green-100 text-green-700 rounded">
-          Product uploaded successfully!
-        </div>
-      )}
+  if (status === 'loading') return <p>Loading...</p>;
+  if (status !== 'authenticated') return null;
 
-      {/* Error Alert */}
-      {error && (
-        <div className="mb-4 p-3  text-red-700 rounded">
-          {error}
-        </div>
-      )}
+  return (
+    <div className="max-w-md mx-auto p-6 bg-white rounded shadow mt-10">
+      <h2 className="text-xl font-bold mb-4 text-center">Upload Product</h2>
+
+      {success && <p className="text-green-600 mb-4 text-center">Product uploaded! Redirecting...</p>}
+      {error && <p className="text-red-600 mb-4 text-center">{error}</p>}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Product Name</label>
-          <input
-            type="text"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            required
-            className="w-full p-2 border rounded"
-          />
-        </div>
+        <input type="text" name="name" placeholder="Product Name" value={formData.name} onChange={handleChange} required className="w-full border p-2 rounded" />
+        <input type="number" name="price" placeholder="Price" value={formData.price} onChange={handleChange} step="0.01" min="0" required className="w-full border p-2 rounded" />
+        <textarea name="description" placeholder="Description" value={formData.description} onChange={handleChange} rows="4" required className="w-full border p-2 rounded" />
+        <input type="file" name="image" onChange={handleChange} accept="image/*" required className="w-full" />
+        {formData.image && <p className="text-sm text-gray-500">Selected: {formData.image.name}</p>}
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Price</label>
-          <input
-            type="number"
-            name="price"
-            value={formData.price}
-            onChange={handleChange}
-            step="0.01"
-            min="0"
-            required
-            className="w-full p-2 border rounded"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Description</label>
-          <textarea
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            required
-            rows="4"
-            className="w-full p-2 border rounded"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Product Image</label>
-          <input
-            type="file"
-            name="image"
-            onChange={handleChange}
-            accept="image/*"
-            required
-            className="w-full p-2 border rounded"
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={isLoading}
-          className={`w-full p-2 rounded text-white ${isLoading ? 'bg-gray-400' : 'bg-blue-500 hover:bg-blue-600'}`}
-        >
+        <button type="submit" disabled={isLoading} className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
           {isLoading ? 'Uploading...' : 'Upload Product'}
         </button>
       </form>

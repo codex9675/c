@@ -8,39 +8,49 @@ export const authOptions = {
     CredentialsProvider({
       name: 'Credentials',
       credentials: {
-        username: { label: "Username", type: "text" },
+        username: { label: "Username", type: "text", placeholder: "jsmith" },
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
+        if (!credentials?.username || !credentials?.password) {
+          throw new Error('Username and password are required')
+        }
+
         try {
-          // Fetch the user based on username
+          // Verify database connection first
+          await prisma.$connect()
+
           const user = await prisma.user.findUnique({
             where: { username: credentials.username }
           })
 
-          // If user does not exist, return null
-          if (!user) return null
-
-          // Check if password matches
-          const isValid = await compare(credentials.password, user.password)
-          if (!isValid) return null
-
-          // Skip expiration check for MASTER account
-          if (user.role !== 'MASTER' && user.passwordExpires && new Date(user.passwordExpires) < new Date()) {
-            throw new Error('Password expired')
+          if (!user) {
+            throw new Error('Invalid credentials')
           }
 
-          // Return user data if validation passes
+          // Verify password
+          const isValid = await compare(credentials.password, user.password)
+          if (!isValid) {
+            throw new Error('Invalid credentials')
+          }
+
+          // Check password expiration (skip for MASTER role)
+          if (user.role !== 'MASTER' && user.passwordExpires && new Date(user.passwordExpires) < new Date()) {
+            throw new Error('Password expired. Please reset your password.')
+          }
+
           return {
             id: user.id,
             name: user.username,
-            email: `${user.username}@yourdomain.com`,  // Fixed string interpolation here
+            email: user.email || `${user.username}@yourdomain.com`,
             role: user.role,
             passwordExpires: user.passwordExpires
           }
         } catch (error) {
-          console.error('Auth error:', error)
-          return null
+          console.error('Authentication error:', error)
+          throw error // Rethrow to show proper error message
+        } finally {
+          await prisma.$disconnect()
         }
       }
     })
@@ -48,23 +58,32 @@ export const authOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
+        token.id = user.id
         token.role = user.role
         token.passwordExpires = user.passwordExpires
-        token.id = user.id;
       }
       return token
     },
     async session({ session, token }) {
-      session.user.role = token.role
-      session.user.id = token.id;
-      session.user.passwordExpires = token.passwordExpires
+      if (token) {
+        session.user.id = token.id
+        session.user.role = token.role
+        session.user.passwordExpires = token.passwordExpires
+      }
       return session
     }
   },
   pages: {
-    signIn: '/auth/login'
+    signIn: '/auth/login',
+    error: '/auth/error' // Add error page
   },
-  secret: process.env.NEXTAUTH_SECRET
+  session: {
+    strategy: 'jwt',
+    maxAge: 24 * 60 * 60, // 1 day
+    updateAge: 60 * 60 // 1 hour
+  },
+  secret: process.env.NEXTAUTH_SECRET,
+  debug: process.env.NODE_ENV === 'development'
 }
 
 const handler = NextAuth(authOptions)

@@ -1,82 +1,124 @@
-// app/api/products/[id]/images/route.js
-import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
-import fs from 'fs'
-import path from 'path'
-
-export async function GET(request, { params }) {
-  try {
-    const productImages = await prisma.productImage.findMany({
-      where: { productId: parseInt(params.id) },
-      orderBy: { createdAt: 'desc' }
-    })
-
-    return NextResponse.json(productImages)
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to fetch product images' },
-      { status: 500 }
-    )
-  }
-}
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import path from "path";
+import fs from "fs";
 
 export async function POST(request, { params }) {
   try {
-    const formData = await request.formData()
-    const imageFile = formData.get('image')
-    const productId = parseInt(params.id)
+    const { id } = params;
+    const session = await getServerSession(authOptions);
 
-    // Validate image file
-    if (!imageFile || imageFile.size === 0) {
+    // Verify authentication
+    if (!session?.user) {
       return NextResponse.json(
-        { error: 'No image file provided' },
-        { status: 400 }
-      )
+        { error: "Authentication required" },
+        { status: 401 }
+      );
     }
 
-    // Validate file size (1MB limit)
-    if (imageFile.size > 1024 * 1024) {
+    // Validate product ID
+    const productId = parseInt(id);
+    if (isNaN(productId)) {
       return NextResponse.json(
-        { error: 'Image size must be less than 1MB' },
+        { error: "Invalid product ID" },
         { status: 400 }
-      )
+      );
     }
 
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+    // Verify product ownership
+    const product = await prisma.product.findFirst({
+      where: {
+        id: productId,
+        user: {
+          id: session.user.id,
+        },
+      },
+      include: {
+        images: true,
+      },
+    });
+
+    if (!product) {
+      return NextResponse.json(
+        { error: "Product not found or access denied" },
+        { status: 404 }
+      );
+    }
+
+    // Check maximum images (4 additional images)
+    if (product.images.length >= 4) {
+      return NextResponse.json(
+        { error: "Maximum 4 additional images allowed" },
+        { status: 400 }
+      );
+    }
+
+    // Handle file upload
+    const formData = await request.formData();
+    const imageFile = formData.get("image");
+
+    if (!imageFile || typeof imageFile === "string") {
+      return NextResponse.json(
+        { error: "No image file provided" },
+        { status: 400 }
+      );
+    }
+
+    // Validate file type and size
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
     if (!allowedTypes.includes(imageFile.type)) {
       return NextResponse.json(
-        { error: 'Only JPEG, PNG, and WebP images are allowed' },
+        { error: "Only JPEG, PNG, and WebP images are allowed" },
         { status: 400 }
-      )
+      );
+    }
+
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (imageFile.size > maxSize) {
+      return NextResponse.json(
+        { error: "Image size must be less than 5MB" },
+        { status: 400 }
+      );
     }
 
     // Create uploads directory if it doesn't exist
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
+    const uploadsDir = path.join(process.cwd(), "public", "uploads");
     if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true })
+      fs.mkdirSync(uploadsDir, { recursive: true });
     }
 
-    // Save file
-    const filename = `product-${productId}-${Date.now()}${path.extname(imageFile.name)}`
-    const filePath = path.join(uploadsDir, filename)
-    const fileBuffer = await imageFile.arrayBuffer()
-    fs.writeFileSync(filePath, Buffer.from(fileBuffer))
+    // Generate unique filename
+    const fileExt = path.extname(imageFile.name);
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const filename = `${session.user.id}-${productId}-${uniqueSuffix}${fileExt}`;
+    const filePath = path.join(uploadsDir, filename);
 
-    // Create database record
-    const productImage = await prisma.productImage.create({
+    // Save file to disk
+    const fileBuffer = await imageFile.arrayBuffer();
+    fs.writeFileSync(filePath, Buffer.from(fileBuffer));
+
+    // Save to database
+    const imageRecord = await prisma.productImage.create({
       data: {
-        filename,
-        productId
-      }
-    })
+        filename: filename,
+        path: `/uploads/${filename}`,
+        productId: productId,
+      },
+    });
 
-    return NextResponse.json(productImage)
+    return NextResponse.json({
+      success: true,
+      image: imageRecord,
+    });
   } catch (error) {
-    console.error('Image upload error:', error)
+    console.error("Image upload error:", error);
     return NextResponse.json(
-      { error: 'Failed to upload image' },
+      { error: "Failed to upload image", details: error.message },
       { status: 500 }
-    )
+    );
+  } finally {
+    await prisma.$disconnect();
   }
 }

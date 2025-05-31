@@ -1,10 +1,13 @@
-
-
 @import "tailwindcss";
 
 /* Slide animations */
 .slide-enter {
   transform: translateX(100%);
+}
+
+body.dark {
+  background-color: #1a202c; /* Dark mode background */
+  color: #f7fafc; /* Dark mode text */
 }
 .slide-enter-active {
   transform: translateX(0);

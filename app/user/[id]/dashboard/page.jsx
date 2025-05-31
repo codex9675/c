@@ -1,16 +1,25 @@
 "use client";
+
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { FaWhatsapp } from "react-icons/fa";
+import { useRouter } from "next/navigation";
 
 export default function ProductForm() {
   const { data: session, status } = useSession();
+  const router = useRouter();
   const { id } = useParams();
   const pathname = usePathname();
+
+  // State to enable/disable video background feature
+  const [videoEnabled, setVideoEnabled] = useState(false);
+
+  // Check if current route is the active one for styling
   const isActive = pathname === `/user/${id}/dashboard/uploadProduct`;
 
+  // Form data state
   const [formData, setFormData] = useState({
     shopName: "",
     shopImage: null,
@@ -18,13 +27,18 @@ export default function ProductForm() {
     bgColor: "#ffffff",
   });
 
+  // Image preview URL
   const [imagePreview, setImagePreview] = useState("");
+
+  // UI states
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
+
+  // Store user profile link and plan
   const [profileLink, setProfileLink] = useState("");
   const [userPlan, setUserPlan] = useState("BASIC");
 
-  // Fetch user data on load
+  // Fetch user/shop data when authenticated and ID available
   useEffect(() => {
     const fetchUserData = async () => {
       if (status === "authenticated" && id) {
@@ -34,18 +48,24 @@ export default function ProductForm() {
 
           if (data.error) throw new Error(data.error);
 
+          // Set fetched data
           setProfileLink(data.profileLink || "");
           setUserPlan(data.plan || "BASIC");
-
           setFormData({
             shopName: data.shopName || "",
-            shopImage: null,
+            shopImage: null, // Do not preload file input, leave null
             description: data.description || "",
             bgColor: data.portfolioColor || "#ffffff",
           });
 
+          // Set existing store image preview
           if (data.storeImage) {
             setImagePreview(`/uploads/${data.storeImage}`);
+          }
+
+          // Set videoEnabled if backend sends this flag
+          if (typeof data.videoEnabled === "boolean") {
+            setVideoEnabled(data.videoEnabled);
           }
         } catch (err) {
           console.error("Error fetching user data:", err);
@@ -57,6 +77,20 @@ export default function ProductForm() {
     fetchUserData();
   }, [status, id]);
 
+  // Log when videoEnabled changes
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/auth/login");
+    }
+
+    if (videoEnabled) {
+      console.log("🎥 Video background is ENABLED by admin.");
+    } else {
+      console.log("❌ Video background is DISABLED by admin.");
+    }
+  }, [videoEnabled, status, router]);
+
+  // Handle form input changes (including file input)
   const handleChange = (e) => {
     const { name, value, files } = e.target;
 
@@ -68,6 +102,7 @@ export default function ProductForm() {
     }
   };
 
+  // Submit form data
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -88,7 +123,13 @@ export default function ProductForm() {
       const formDataToSend = new FormData();
       formDataToSend.append("userId", id);
       formDataToSend.append("shopName", formData.shopName);
-      formDataToSend.append("description", formData.description);
+
+      if (userPlan === "PROFESSIONAL") {
+        formDataToSend.append("description", formData.description);
+        formDataToSend.append("portfolioColor", formData.bgColor);
+      } else {
+        formDataToSend.append("description", formData.description);
+      }
 
       if (formData.shopImage) {
         formDataToSend.append("shopImage", formData.shopImage);
@@ -96,9 +137,8 @@ export default function ProductForm() {
         formDataToSend.append("keepExistingImage", "true");
       }
 
-      if (userPlan === "PROFESSIONAL") {
-        formDataToSend.append("portfolioColor", formData.bgColor);
-      }
+      // Append videoEnabled flag to send to backend
+      formDataToSend.append("videoEnabled", videoEnabled ? "true" : "false");
 
       const res = await fetch("/api/shop", {
         method: "POST",
@@ -110,7 +150,12 @@ export default function ProductForm() {
         throw new Error(errorData.message || "Failed to save shop data");
       }
 
-      setMessage({ text: "Shop settings saved successfully!", type: "success" });
+      setMessage({
+        text: "Shop settings saved successfully!",
+        type: "success",
+      });
+
+      // Optionally reload page or reset form after save
       setTimeout(() => window.location.reload(), 2000);
     } catch (err) {
       setMessage({ text: err.message, type: "error" });
@@ -119,6 +164,7 @@ export default function ProductForm() {
     }
   };
 
+  // WhatsApp share link for profile
   const getWhatsAppShareLink = () => {
     if (typeof window !== "undefined" && profileLink) {
       return `https://wa.me/?text=${encodeURIComponent(
@@ -130,19 +176,6 @@ export default function ProductForm() {
 
   return (
     <div className="mt-6 mr-6 ml-8">
-      <nav>
-        <div className="flex justify-end">
-          <Link
-            href={`/user/${id}/dashboard/uploadProduct`}
-            className={`mr-10 bg-[rgb(5,52,59)] w-50 h-10 rounded-lg text-white hover:bg-[rgb(10,151,240)] pl-4.5 pt-2 font-bold transition-all duration-300 ${
-              isActive ? "bg-[rgb(10,151,240)]" : ""
-            }`}
-          >
-            Upload Your Products
-          </Link>
-        </div>
-      </nav>
-
       <form onSubmit={handleSubmit} className="space-y-4 mt-6">
         <h1 className="text-xl font-bold">Cover Page</h1>
 
@@ -162,7 +195,9 @@ export default function ProductForm() {
         )}
 
         <div>
-          <label className="block font-medium mb-1">Enter your cover page name</label>
+          <label className="block font-medium mb-1">
+            Enter your cover page name
+          </label>
           <input
             name="shopName"
             type="text"
@@ -175,20 +210,21 @@ export default function ProductForm() {
         </div>
 
         <div>
-          <label className="block font-medium mb-1">Enter your jargon</label>
+          <label className="block font-medium mb-1">Your Jargon</label>
           <input
-            type="text"
             name="description"
-            placeholder="Add your jargon"
+            type="text"
+            placeholder="Add your shop tagline"
+            className="border p-2 w-full rounded-lg"
             value={formData.description}
             onChange={handleChange}
-            className="border p-2 w-full rounded-lg"
           />
         </div>
 
         <div>
           <label className="block font-medium mb-1">
-            Shop Logo/Image {imagePreview ? "" : <span className="text-red-500">*</span>}
+            Shop Logo/Image{" "}
+            {!imagePreview && <span className="text-red-500">*</span>}
           </label>
           <input
             name="shopImage"
@@ -222,33 +258,21 @@ export default function ProductForm() {
         </div>
 
         {userPlan === "PROFESSIONAL" && (
-          <>
-            <div>
-              <label className="block font-medium mb-1">Shop Description</label>
-              <textarea
-                name="description"
-                placeholder="Tell customers about your shop..."
-                className="border p-2 w-full rounded-lg"
-                value={formData.description}
+          <div>
+            <label className="block font-medium mb-1">
+              Shop Background Color
+            </label>
+            <div className="flex items-center gap-4">
+              <input
+                name="bgColor"
+                type="color"
+                className="h-10 w-10 cursor-pointer"
+                value={formData.bgColor}
                 onChange={handleChange}
-                rows={4}
               />
+              <span>{formData.bgColor}</span>
             </div>
-
-            <div>
-              <label className="block font-medium mb-1">Shop Background Color</label>
-              <div className="flex items-center gap-4">
-                <input
-                  name="bgColor"
-                  type="color"
-                  className="h-10 w-10 cursor-pointer"
-                  value={formData.bgColor}
-                  onChange={handleChange}
-                />
-                <span>{formData.bgColor}</span>
-              </div>
-            </div>
-          </>
+          </div>
         )}
 
         <div className="pt-4">

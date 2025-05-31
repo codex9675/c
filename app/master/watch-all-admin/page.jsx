@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FaExternalLinkAlt } from "react-icons/fa";
 import Link from "next/link";
-
+import { MdOutlineCheck } from "react-icons/md";
 export default function WatchAllAdmin() {
   const { data: session } = useSession();
   const router = useRouter();
@@ -13,10 +13,13 @@ export default function WatchAllAdmin() {
   const [error, setError] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     const fetchUsers = async () => {
       try {
+        setLoading(true);
         const res = await fetch("/api/user");
         if (!res.ok) throw new Error("Failed to fetch users");
         const data = await res.json();
@@ -35,19 +38,31 @@ export default function WatchAllAdmin() {
 
   const handleRemoveAdmin = async (adminId) => {
     try {
+      setIsDeleting(true);
       const res = await fetch(`/api/user?id=${adminId}`, {
         method: "DELETE",
       });
 
-      if (!res.ok) throw new Error("Failed to remove admin");
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to remove admin");
+      }
+
+      // Optimistically update the UI
+      setSuccess(true);
+
+      setTimeout(() => setSuccess(false), 3000);
 
       setUsers(users.filter((user) => user.id !== adminId));
       setConfirmDelete(null);
+
+      // Optional: Show success message
     } catch (err) {
       setError(err.message);
+    } finally {
+      setIsDeleting(false);
     }
   };
-
   const calculateRemainingDays = (expiryDate) => {
     const today = new Date();
     const expiry = new Date(expiryDate);
@@ -89,6 +104,12 @@ export default function WatchAllAdmin() {
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-6">Admin Management</h1>
+      {success && (
+        <div className="bg-green-600 flex h-10 rounded-4xl pt-2 pl-4 max-w-70 mb-10">
+          <MdOutlineCheck className="text-2xl pr-2 text-white" />
+          <h1 className="text-white pr-5">Admin are deleted successfully</h1>
+        </div>
+      )}
 
       {/* Search and Filter Section */}
       <div className="mb-6 flex justify-between items-center">
@@ -161,6 +182,7 @@ export default function WatchAllAdmin() {
                       <button
                         className="text-red-600 hover:text-red-800"
                         onClick={() => setConfirmDelete(user.id)}
+                        disabled={isDeleting}
                       >
                         Remove
                       </button>
@@ -180,14 +202,18 @@ export default function WatchAllAdmin() {
                         </p>
                         <div className="flex gap-2">
                           <button
-                            className="bg-red-600 text-white px-4 py-2 rounded"
+                            className={`bg-red-600 text-white px-4 py-2 rounded ${
+                              isDeleting ? "opacity-50 cursor-not-allowed" : ""
+                            }`}
                             onClick={() => handleRemoveAdmin(user.id)}
+                            disabled={isDeleting}
                           >
-                            Yes
+                            {isDeleting ? "Deleting..." : "Yes"}
                           </button>
                           <button
                             className="text-gray-600"
                             onClick={() => setConfirmDelete(null)}
+                            disabled={isDeleting}
                           >
                             No
                           </button>
